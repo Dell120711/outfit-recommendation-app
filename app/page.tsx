@@ -1,69 +1,72 @@
-"use client";
+"use server";
 
-import BrandSection from "@/components/landing-page/brand-section";
-import HeroSection from "@/components/landing-page/hero-section";
-import ImageSearchSection from "@/components/landing-page/image-search-section";
-import OverviewSection from "@/components/landing-page/overview-section";
-import RecommendationSection from "@/components/landing-page/recommendation-section";
-import TextSearchSection from "@/components/landing-page/text-search-section";
+import { getRecommendationRecordById } from "@/actions/recommendation";
+import ItemList from "@/components/item/item-list";
 import { Button } from "@/components/ui/button";
-import { ChevronDown } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Recommendation } from "@/type";
+import { createClient } from "@/utils/supabase/server";
+import Link from "next/link";
+import UserInfoCard from "./user-info-card";
 
-export default function LandingPage() {
-  const [showButton, setShowButton] = useState(true)
-  const overviewSectionRef = useRef<HTMLElement>(null)
+interface RecommendationPageProps {
+  params: Promise<{ recommendation_id: string }>;
+}
 
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrollPosition = window.scrollY;
-      const threshold = window.innerHeight * 0.5;
-
-      if (scrollPosition > threshold) {
-        setShowButton(false);
-      } else {
-        setShowButton(true);
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
-
-  const scrollToSecondSection = () => {
-    console.log('scroll')
-    overviewSectionRef.current?.scrollIntoView({ behavior: 'smooth' })
-    setShowButton(false);
-  }
-
+const RecommendationPage = async ({
+  params,
+}: RecommendationPageProps) => {
+  const { recommendation_id } = await params;
+  const supabase = createClient();
+  // Get the user data
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const recommendation: Recommendation = (await getRecommendationRecordById(
+    recommendation_id, user !== null ? user.id : null
+  )) as Recommendation;
+  if (!recommendation) return <div className="w-full h-full flex flex-col gap-8 items-center justify-center">
+    <p className="text-red-400 font-bold">
+      你沒有權限訪問別人的推薦結果唷！
+    </p>
+    <Link href='/home'>
+      <Button variant='destructive'>
+        回到首頁
+      </Button>
+    </Link>
+  </div>;
   return (
-    <div className='min-h-screen w-full bg-gray-50 flex flex-col pt-8'>
-      <HeroSection />
-      
-      <section ref={overviewSectionRef}>
-        <OverviewSection  />
-      </section>
-      <RecommendationSection />
-      <TextSearchSection />
-      <ImageSearchSection />
-      <BrandSection />
-      {/* <TestimonialSection /> */}
-      {/* Floating Button */}
-      
-      {showButton && (
-        <div className="w-full fixed bottom-4 flex items-center justify-center">
-          <Button
-            className="rounded-full p-3 shadow-lg animate-bounce opacity-50"
-            onClick={scrollToSecondSection}
-            variant='outline'
-          >
-            <ChevronDown className="h-6 w-6" />
-            <span className="sr-only">Scroll to next section</span>
-          </Button>
-        </div>
-      )}
+    <div className='w-full flex flex-col items-center justify-center'>
+      <div className='py-10 w-full flex gap-4 flex-col items-center justify-center'>
+        <h2 className='text-lg text-muted-foreground'>
+          您上傳的衣服
+        </h2>
+        <UserInfoCard
+          imageUrl={recommendation.imageUrl}
+          gender={recommendation.gender}
+        />
+        <Link href='/upload' className="underline cursor-pointer">
+          試試其他衣服
+        </Link>
+      </div>
+      <div className='flex flex-col gap-4 justify-center items-center md:max-w-[80vw]'>
+        {Object.keys(recommendation.styles).map((recommendedStyle, index) => {
+          console.log(recommendation.styles[recommendedStyle].series);
+          return (
+            <ItemList
+              key={`recommended-style-${index}`}
+              id={recommendation.styles[recommendedStyle].suggestion_id}
+              index={index}
+              title={recommendedStyle}
+              description={recommendation.styles[recommendedStyle].description}
+              series={recommendation.styles[recommendedStyle].series}
+              expandable={true} />
+          );
+        })}
+      </div>
+      <br />
+      {/* <FeedbackCard /> */}
     </div>
   );
-}
+};
+
+export default RecommendationPage;
